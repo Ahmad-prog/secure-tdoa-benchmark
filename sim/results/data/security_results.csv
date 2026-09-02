@@ -1,0 +1,17 @@
+M,layer,spoof_success,replay_success
+10,L0_none,1.0,1.0
+10,L1_crypto,0.0915,1.0
+10,L2_crypto_sig,0.0,1.0
+10,L3_auth_timing,0.0,0.0
+100,L0_none,1.0,1.0
+100,L1_crypto,0.0115,1.0
+100,L2_crypto_sig,0.0,1.0
+100,L3_auth_timing,0.0,0.0
+1000,L0_none,1.0,1.0
+1000,L1_crypto,0.0005,1.0
+1000,L2_crypto_sig,0.0,1.0
+1000,L3_auth_timing,0.0,0.0
+2320,L0_none,1.0,1.0
+2320,L1_crypto,0.0005,1.0
+2320,L2_crypto_sig,0.0,1.0
+2320,L3_auth_timing,0.0,0.0

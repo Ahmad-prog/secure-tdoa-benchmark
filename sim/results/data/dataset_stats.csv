@@ -1,0 +1,10 @@
+jammer,tier,slots,channels,jammed_fraction,mean_channels_jammed_per_slot
+constant,low,128,32,0.03125,1.0
+random,low,128,32,0.03125,1.0
+pulsed,low,128,32,0.015625,0.5
+sweep,mid,128,32,0.03125,1.0
+comb,mid,128,32,0.15625,5.0
+partial_band,mid,128,32,0.28125,9.0
+reactive,top,128,32,0.093017578125,2.9765625
+learning,top,128,32,0.03125,1.0
+smart_partial,top,128,32,0.28125,9.0
