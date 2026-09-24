@@ -11,7 +11,7 @@ Security layers (increasing):
   L2 crypto+sig    : hopping + HMAC signature only (no nonce / no ToF check)
   L3 auth-timing   : hopping + HMAC + fresh nonce + time-of-flight check (full)
 
-The L2 vs L3 contrast is the DRAC C9 point: a valid signature does NOT stop a
+The L2 vs L3 contrast is the central point: a valid signature does NOT stop a
 meaconing replay from shifting the timing; the nonce + ToF binding does.
 """
 from __future__ import annotations

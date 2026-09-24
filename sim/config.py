@@ -1,7 +1,7 @@
 """Central configuration and physical constants for the secure-TDOA study.
 
 All experiments import their defaults from here so that a single edit changes
-the whole study consistently (reproducibility requirement, DRAC C1/C4).
+the whole study consistently (single-source-of-truth reproducibility).
 """
 from __future__ import annotations
 import numpy as np

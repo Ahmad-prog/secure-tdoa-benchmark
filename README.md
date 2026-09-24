@@ -19,8 +19,9 @@ rather than an assertion).
 
 ```bash
 pip install -r requirements.txt
-python -m sim.run_all            # full study (~15 min, 12 CPU cores)
-python -m sim.run_all --quick    # skip the slow deep-learning sweeps
+python -m sim.run_all            # full study (several hours; the
+                                 # step-matched deep-learning arm dominates)
+python -m sim.run_all --quick    # skip the slow deep-learning sweeps (~15 min)
 ```
 
 Outputs land in `sim/results/`: CSVs, the released

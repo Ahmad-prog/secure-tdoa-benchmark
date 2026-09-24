@@ -1,5 +1,5 @@
 """Experiment 5 -- per-decision compute and energy: cryptographic hopping vs
-deep-learning inference (RO3, DRAC C11 / pushback P1).
+deep-learning inference (RO3: the cost and energy limits of both approaches).
 
 Measures AES-block throughput and NN forward-pass cost empirically, converts to
 energy with standard per-operation figures, and tabulates the gap.

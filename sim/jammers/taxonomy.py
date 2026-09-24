@@ -1,4 +1,4 @@
-"""Nine-class, three-tier jammer taxonomy (proposal Table 3, DRAC C3).
+"""Ten-class, three-tier jammer taxonomy.
 
 Every jammer exposes ``step(t, history) -> mask`` where ``mask`` is a boolean
 array of length M marking jammed channels for slot t.  ``history`` is the list
@@ -8,8 +8,13 @@ which the adaptive (Tier-3) jammers exploit.
 from __future__ import annotations
 import numpy as np
 
+# Fraction of the band a wideband barrage jammer denies. Set above the DSSS
+# processing-gain tolerance (strategies.DSSS_TOL) so the taxonomy spans both
+# sides of that margin instead of only the narrowband side.
+BARRAGE_FRAC = 0.70
+
 TIERS = {
-    "constant": "low", "random": "low", "pulsed": "low",
+    "constant": "low", "random": "low", "pulsed": "low", "barrage": "low",
     "sweep": "mid", "comb": "mid", "partial_band": "mid",
     "reactive": "top", "learning": "top", "smart_partial": "top",
 }
@@ -46,6 +51,26 @@ class PulsedJammer(Jammer):
         m = self._empty()
         if t % self.period < self.duty:
             m[0] = True
+        return m
+
+
+class BarrageJammer(Jammer):
+    """Wideband barrage: noise spread over a large fraction of the band.
+
+    A fresh random subset of ``frac`` of the channels is denied each slot. This
+    is the brute-force counter to spread spectrum -- it exceeds a DSSS
+    receiver's processing-gain margin, which no narrowband jammer in this
+    taxonomy does. The price the adversary pays, diluting a fixed transmit
+    power across the whole band, is a power-domain effect and is therefore not
+    represented in this occupancy-level model; see the limitations discussion.
+    """
+    def __init__(self, M, seed=0, frac=BARRAGE_FRAC):
+        super().__init__(M, seed)
+        self.w = max(1, int(frac * M))
+
+    def step(self, t, history):
+        m = self._empty()
+        m[self.rng.choice(self.M, size=min(self.w, self.M), replace=False)] = True
         return m
 
 
@@ -132,6 +157,7 @@ def make_jammer(name: str, M: int, seed: int = 0, oracle=None) -> Jammer:
     if name == "constant": return ConstantJammer(M, seed)
     if name == "random": return RandomChannelJammer(M, seed)
     if name == "pulsed": return PulsedJammer(M, seed)
+    if name == "barrage": return BarrageJammer(M, seed)
     if name == "sweep": return SweepJammer(M, seed)
     if name == "comb": return CombJammer(M, seed)
     if name == "partial_band": return PartialBandJammer(M, seed)

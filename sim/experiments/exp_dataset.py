@@ -1,5 +1,5 @@
 """Experiment 0 -- build and release the labelled spectrum-occupancy dataset
-(RO2 data, DRAC C1/C4 dataset relevance).
+(RO2 data: the released labelled spectrum-occupancy dataset).
 
 For every jammer class a per-slot x per-channel occupancy matrix is generated
 (clean=0 / jammed=1) and saved as an .npz release, with per-class statistics

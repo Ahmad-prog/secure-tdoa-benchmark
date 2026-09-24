@@ -1,5 +1,5 @@
 """Experiment 4 -- attack-success rate of spoofing and replay adversaries under
-each security layer (RO4, DRAC C5 replay, C9 signature-only).
+each security layer (RO4: replay defence and the signature-only ablation).
 
 Produces: data/security_results.csv, figures/fig_security.png
 """

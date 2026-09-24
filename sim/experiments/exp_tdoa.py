@@ -1,6 +1,6 @@
 """Experiment 1 -- TDOA positioning accuracy vs the Cramer-Rao lower bound.
 
-Addresses RO1 / RQ1 and DRAC C1 (dataset relevance for positioning).
+Addresses RO1 / RQ1: positioning accuracy against the CRLB.
 Produces:  data/tdoa_rmse_vs_snr.csv, data/tdoa_gccphat_validation.csv,
            figures/fig_tdoa_crlb.png
 """

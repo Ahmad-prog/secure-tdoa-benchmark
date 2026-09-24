@@ -1,5 +1,5 @@
 """Experiment 6 -- synchronization drift tolerance for cryptographic de-hopping
-(RO3, DRAC C7 'how is synchronization ensured').
+(RO3: how hop synchronization is ensured and what drift it tolerates).
 
 Correct de-hopping needs beacon and drone to share the hop index.  If the clock
 offset (plus jitter) exceeds a guard fraction of the hop dwell, they land on

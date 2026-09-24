@@ -1,7 +1,7 @@
 """Experiment 2 -- anti-jamming benchmark of cryptographic hopping against the
 cyber baselines across the nine-class taxonomy and channel scales.
 
-Addresses RQ2 and DRAC C2 (cyber comparison), C6 (crypto anchor).
+Addresses RQ2: the cyber-technique comparison and the cryptographic anchor.
 Produces: data/antijam_results.csv, figures/fig_antijam_heatmap.png
 """
 from __future__ import annotations

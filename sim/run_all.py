@@ -13,14 +13,14 @@ from .experiments import (exp_dataset, exp_tdoa, exp_antijam, exp_scaling,
 
 
 STAGES = [
-    ("dataset  (C1)", exp_dataset.run, False),
-    ("tdoa     (RO1/RQ1, C1)", exp_tdoa.run, False),
-    ("antijam  (RQ2, C2/C6)", exp_antijam.run, False),
-    ("security (RO4, C5/C9)", exp_security.run, False),
-    ("cost     (C11/P1)", exp_cost.run, False),
-    ("sync     (C7)", exp_sync.run, False),
-    ("scaling  (RO2, C3)", exp_scaling.run, True),
-    ("signif.  (IRB stats)", exp_significance.run, True),
+    ("dataset  (released spectrum-occupancy data)", exp_dataset.run, False),
+    ("tdoa     (RO1/RQ1 positioning vs CRLB)", exp_tdoa.run, False),
+    ("antijam  (RQ2 strategy x jammer benchmark)", exp_antijam.run, False),
+    ("security (RO4 layered attack success)", exp_security.run, False),
+    ("cost     (per-decision cost and energy)", exp_cost.run, False),
+    ("sync     (hop-sync drift tolerance)", exp_sync.run, False),
+    ("scaling  (RO2 deep learning at scale)", exp_scaling.run, True),
+    ("signif.  (significance testing)", exp_significance.run, True),
 ]
 
 
