@@ -25,23 +25,23 @@
 % BEGIN-RESULT-MACROS
 % anti-jamming (ten-class taxonomy)
 \newcommand{\cryptoMeanLo}{0.74}      % mean avoidance over taxonomy, M=10
-\newcommand{\cryptoMeanHi}{0.86}      % mean avoidance over taxonomy, M=2320
+\newcommand{\cryptoMeanHi}{0.87}      % mean avoidance over taxonomy, M=2320
 \newcommand{\cryptoLearnLo}{0.91}     % vs learning jammer, M=10
-\newcommand{\cryptoLearnHi}{0.99}     % vs learning jammer, M=2320
+\newcommand{\cryptoLearnHi}{1.00}     % vs learning jammer, M=2320
 \newcommand{\barrageAvoid}{0.30}      % any hopper vs barrage (70% denied)
 \newcommand{\dsssBarrageTput}{0.45}   % DSSS throughput under barrage
 % scaling -- equal wall clock
 \newcommand{\dqnBudgetTen}{0.91}
-\newcommand{\dqnBudgetKilo}{0.91}
-\newcommand{\dqnBudgetMax}{0.75}
+\newcommand{\dqnBudgetKilo}{0.07}
+\newcommand{\dqnBudgetMax}{0.16}
 \newcommand{\cryptoScale}{0.70}
-\newcommand{\stepsLo}{2,407}
-\newcommand{\stepsHi}{290}
+\newcommand{\stepsLo}{1,655}
+\newcommand{\stepsHi}{5}
 \newcommand{\paramsLo}{1.1\times10^{4}}
-\newcommand{\paramsHi}{1.1\times10^{5}}
+\newcommand{\paramsHi}{2.5\times10^{6}}
 % scaling -- equal gradient steps (filled from the step-matched arm)
-\newcommand{\dqnStepTen}{0.82}
-\newcommand{\dqnStepKilo}{0.82}
+\newcommand{\dqnStepTen}{0.90}
+\newcommand{\dqnStepKilo}{0.00}
 % cost
 \newcommand{\costRatio}{7.2\times10^{5}}
 % END-RESULT-MACROS
@@ -452,8 +452,10 @@ equal-wall-clock budget ($10$ seeds) and equal gradient steps ($3$ seeds).}
 \textbf{$M$} & \textbf{DQN} & \textbf{DQN} & \textbf{Crypto} & \textbf{Train} \\
  & \textbf{(20\,s)} & \textbf{(equal steps)} & & \textbf{steps/s} \\ \midrule
 % BEGIN-SCALING-ROWS
-10   & 0.91 & 0.82 & 0.70 & 2,407 \\
-100  & 0.75 & 0.72 & 0.70 & \phantom{00}290 \\
+10   & 0.91 & 0.90 & 0.70 & 1,655 \\
+100  & 0.84 & 0.83 & 0.70 & \phantom{00}181 \\
+1000 & 0.07 & 0.00 & 0.70 & \phantom{000}11 \\
+2320 & 0.16 & 0.00 & 0.70 & \phantom{0000}5 \\
 % END-SCALING-ROWS
 \bottomrule
 \end{tabular}
