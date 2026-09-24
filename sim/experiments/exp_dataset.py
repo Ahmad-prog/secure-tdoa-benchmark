@@ -39,16 +39,25 @@ def run(M=32, slots=128, seed=config.BASE_SEED):
 
 
 def _plot(arrays, M, slots):
-    fig, axes = plt.subplots(3, 3, figsize=(9, 7))
-    for ax, jam in zip(axes.ravel(), taxonomy.ALL_JAMMERS):
-        ax.imshow(arrays[jam].T, aspect="auto", cmap="Greys",
+    # The grid is derived from the class count: a hard-coded 3x3 silently
+    # dropped the tenth class when the taxonomy grew.
+    names = [j for j in taxonomy.ALL_JAMMERS if j in arrays]
+    ncol = 5 if len(names) > 9 else 3
+    nrow = int(np.ceil(len(names) / ncol))
+    fig, axes = plt.subplots(nrow, ncol, figsize=(2.7 * ncol, 2.5 * nrow),
+                             squeeze=False)
+    for ax, jam in zip(axes.ravel(), names):
+        ax.imshow(arrays[jam].T, aspect="auto", cmap="Greys", vmin=0, vmax=1,
                   interpolation="nearest", origin="lower")
-        ax.set_title(f"{jam}  [{taxonomy.TIERS[jam]}]", fontsize=9)
-        ax.set_xlabel("slot", fontsize=7); ax.set_ylabel("channel", fontsize=7)
-        ax.tick_params(labelsize=6)
-    fig.suptitle("Spectrum-occupancy dataset: jammed (black) vs clean per slot",
-                 fontsize=11)
-    fig.tight_layout(rect=[0, 0, 1, 0.97])
+        ax.set_title(f"{jam}  [{taxonomy.TIERS[jam]} tier]", fontsize=9)
+        ax.set_xlabel("Slot index", fontsize=8)
+        ax.set_ylabel("Channel index", fontsize=8)
+        ax.tick_params(labelsize=7)
+    for ax in axes.ravel()[len(names):]:          # blank any unused cell
+        ax.axis("off")
+    fig.suptitle(f"Spectrum-occupancy dataset: jammed channels black, clean "
+                 f"white ({slots} slots x {M} channels per class)", fontsize=11)
+    fig.tight_layout(rect=[0, 0, 1, 0.95])
     for d in (config.FIG_DIR, config.PAPER_FIG_DIR):
         fig.savefig(d / "fig_dataset.png", dpi=200)
     plt.close(fig)

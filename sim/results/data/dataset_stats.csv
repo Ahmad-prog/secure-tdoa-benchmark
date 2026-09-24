@@ -2,6 +2,7 @@ jammer,tier,slots,channels,jammed_fraction,mean_channels_jammed_per_slot
 constant,low,128,32,0.03125,1.0
 random,low,128,32,0.03125,1.0
 pulsed,low,128,32,0.015625,0.5
+barrage,low,128,32,0.6875,22.0
 sweep,mid,128,32,0.03125,1.0
 comb,mid,128,32,0.15625,5.0
 partial_band,mid,128,32,0.28125,9.0

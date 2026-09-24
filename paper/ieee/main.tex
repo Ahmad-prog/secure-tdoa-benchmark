@@ -1,0 +1,619 @@
+% =====================================================================
+%  IEEE journal manuscript (IEEEtran, two-column).
+%  Benchmarking DRL anti-jamming vs cryptographic frequency hopping for
+%  GPS-denied drone TDOA positioning.
+%  figures/ beside this file; _bib.tex holds the numbered bibliography.
+% =====================================================================
+\documentclass[journal]{IEEEtran}
+
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{url}
+\usepackage[hidelinks]{hyperref}
+
+\graphicspath{{figures/}}
+
+% ---------------------------------------------------------------------
+%  Volatile result values live here ONLY, so a re-run updates one block.
+%  Regenerated from sim/results/data/*.csv by paper/ieee/update_numbers.py
+%  -- do not hand-edit, and do not repeat these numbers in the prose.
+% ---------------------------------------------------------------------
+% BEGIN-RESULT-MACROS
+% anti-jamming (ten-class taxonomy)
+\newcommand{\cryptoMeanLo}{0.74}      % mean avoidance over taxonomy, M=10
+\newcommand{\cryptoMeanHi}{0.86}      % mean avoidance over taxonomy, M=2320
+\newcommand{\cryptoLearnLo}{0.91}     % vs learning jammer, M=10
+\newcommand{\cryptoLearnHi}{0.99}     % vs learning jammer, M=2320
+\newcommand{\barrageAvoid}{0.30}      % any hopper vs barrage (70% denied)
+\newcommand{\dsssBarrageTput}{0.45}   % DSSS throughput under barrage
+% scaling -- equal wall clock
+\newcommand{\dqnBudgetTen}{0.91}
+\newcommand{\dqnBudgetKilo}{0.91}
+\newcommand{\dqnBudgetMax}{0.75}
+\newcommand{\cryptoScale}{0.70}
+\newcommand{\stepsLo}{2,407}
+\newcommand{\stepsHi}{290}
+\newcommand{\paramsLo}{1.1\times10^{4}}
+\newcommand{\paramsHi}{1.1\times10^{5}}
+% scaling -- equal gradient steps (filled from the step-matched arm)
+\newcommand{\dqnStepTen}{0.82}
+\newcommand{\dqnStepKilo}{0.82}
+% cost
+\newcommand{\costRatio}{7.2\times10^{5}}
+% END-RESULT-MACROS
+
+\begin{document}
+
+\title{Benchmarking Deep-Reinforcement-Learning Anti-Jamming\\Against
+Cryptographic Frequency Hopping for\\GPS-Denied Drone Positioning}
+
+\author{Muhammad~Ahmad~and~Ghulam~Mustafa%
+\thanks{The authors are with the Department of Computing (Artificial
+Intelligence / Data Science), Shifa Tameer-e-Millat University, Islamabad,
+Pakistan (e-mail: ahmad.stmu@gmail.com; ghulam.mustafa@stmu.edu.pk).}%
+\thanks{The labelled spectrum-occupancy and TDOA datasets, the simulator, and
+all scripts needed to reproduce every figure and table in this paper are
+available at \url{https://github.com/Ahmad-prog/secure-tdoa-benchmark} under
+the MIT licence.}}
+
+\markboth{IEEE Transactions on Aerospace and Electronic Systems}%
+{Ahmad and Mustafa: Benchmarking DRL Anti-Jamming Against Cryptographic Frequency Hopping}
+
+\maketitle
+
+\begin{abstract}
+Drones increasingly operate where the Global Positioning System (GPS) is jammed
+or spoofed, and Time-Difference-of-Arrival (TDOA) multilateration from ground
+beacons is a proven GPS-independent alternative whose reliability depends
+entirely on the radio channel carrying its positioning signals. We reproduce,
+train, and scale a deep-Q-network (DQN) anti-jamming model and benchmark it,
+under an identical environment, jammer set, and metric suite, against a
+training-free cryptographic frequency-hopping baseline and classical spread
+spectrum baselines, for the task of securing drone TDOA positioning. All
+methods, a ten-class jammer taxonomy spanning narrowband to wideband barrage,
+and released labelled spectrum-occupancy datasets run in a self-contained,
+CPU-only simulator with fixed seeds. The maximum-likelihood TDOA estimator
+attains the Cram\'er--Rao lower bound in line-of-sight (efficiency
+$\approx\!1.0$), and RANSAC mitigation cuts non-line-of-sight median error up to
+$20\times$. The learned model matches or beats cryptographic hopping at small
+channel counts (avoidance \textbf{\dqnBudgetTen} vs \textbf{\cryptoScale} at
+$M{=}10$) but degrades as channels scale toward military-realistic counts, under
+both an equal-wall-clock and an equal-gradient-step training regime, whereas
+cryptographic hopping is unaffected and reaches avoidance
+$\approx\!\cryptoLearnHi$ against an intelligent adversary that drives
+predictable hopping to $0.0$. A valid message signature still loses to a
+meaconing replay (attack success $1.0$); an authenticated-timing layer
+(HMAC $+$ nonce $+$ time-of-flight) drives spoofing and replay success to
+$0.0$. Per decision, cryptographic hopping costs \textbf{13\,pJ} versus up to
+\textbf{9.3\,$\mu$J} for deep-learning inference ($\sim\!\costRatio\times$), and
+needs no training. We release the datasets, code, and benchmark.
+\end{abstract}
+
+\begin{IEEEkeywords}
+GPS-denied positioning, TDOA multilateration, cryptographic frequency hopping,
+deep reinforcement learning, anti-jamming, replay attacks, reproducible
+benchmark.
+\end{IEEEkeywords}
+
+% ================================================================= 1. INTRO
+\section{Introduction}\label{sec:intro}
+\IEEEPARstart{U}{nmanned} aerial vehicles now perform safety-critical roles,
+inspection, delivery, search-and-rescue, and defence, that demand reliable
+positioning even when an adversary is actively denying it. GPS signals are weak
+and unauthenticated, so low-cost jammers can deny them~\cite{ref18} and
+spoofers can inject a false location~\cite{ref24,ref25,ref19}. A robust,
+GPS-independent capability is therefore essential. TDOA multilateration
+provides one: a drone measures the differences in arrival time of signals from
+beacons at known positions and solves a hyperbolic system for its own location,
+requiring neither GPS nor an on-board clock~\cite{ref6,ref8,ref30}. Its
+resilience, however, is only as strong as the radio channel carrying the
+positioning signals. If those signals are jammed no fix is possible, if a
+beacon is spoofed the fix is wrong, and if a genuine signal is recorded and
+replayed with a delay the timing that TDOA relies upon is silently corrupted.
+Securing the channel is thus inseparable from securing the position.
+
+Two communities offer competing answers. Academic work increasingly applies
+deep learning to detect jamming and adaptively hop to clean
+channels~\cite{ref11,ref12,ref13,ref31}. Fielded systems that must survive real
+jamming instead use cryptographically-driven frequency hopping, in which a
+shared secret key generates an unpredictable hop
+sequence~\cite{ref1,ref2,ref17}. The learned approach is data-driven, adaptive,
+and avoidance-based; the cryptographic approach is proven, training-free, and
+unpredictability-based. No prior work has placed the two side by side, under an
+identical environment, for drone positioning, nor used cryptographic hopping to
+secure a TDOA position estimate against the full jam/spoof/replay threat.
+
+\subsection{Problem Statement}
+Let the drone position be $p\in\mathbb{R}^3$ and let beacons
+$s_0,\dots,s_{N-1}\in\mathbb{R}^3$ be known. With $r_i=\lVert p-s_i\rVert$, the
+measured range differences relative to reference beacon $0$ are
+\begin{equation}
+d_i = (r_i - r_0) + n_i, \qquad i=1,\dots,N-1,
+\label{eq:tdoa}
+\end{equation}
+where $n_i$ is estimation noise; the position estimate is the maximum-likelihood
+solution
+\begin{equation}
+\hat p = \arg\min_{p}\; \big(d - h(p)\big)^{\!\top}\Sigma^{-1}\big(d - h(p)\big),
+\label{eq:ml}
+\end{equation}
+with $h_i(p) = \lVert p-s_i\rVert - \lVert p-s_0\rVert$. The positioning
+signals are carried on one of $M$ channels chosen each slot $t$ by a hopping
+policy $c_t$; a jammer denies a set $J_t\subseteq\{0,\dots,M-1\}$. The security
+objective is to maximise the jamming-avoidance rate
+\begin{equation}
+A = \frac1T\sum_{t=1}^{T}\mathbf{1}\!\left[c_t\notin J_t\right]
+\label{eq:avoid}
+\end{equation}
+while keeping the estimate~\eqref{eq:ml} authentic under spoofing and replay,
+and while remaining tractable as $M$ grows toward the $2{,}320$-channel
+configuration of fielded frequency-hopping radios~\cite{ref17}.
+
+\subsection{Contributions}
+\begin{enumerate}
+\item An open, reproducible benchmark with released labelled
+spectrum-occupancy and TDOA datasets, a ten-class jammer taxonomy spanning
+narrowband through wideband barrage, and a single simulator hosting every
+method so that the hopping strategy is the only variable that changes.
+\item The first controlled head-to-head of cryptographic hopping against a
+reproduced DQN anti-jamming model under one environment and metric suite.
+\item An empirical model-scaling characterisation under two training regimes,
+equal wall clock and equal gradient steps, separating degradation caused by a
+compute budget from degradation intrinsic to the learning problem.
+\item An authenticated-timing layer that closes the replay/meaconing gap left
+open by hopping and by message signatures alike, integrated with rather than
+replacing an existing protocol stack.
+\item A per-decision cost and energy analysis, and an explicit account of the
+operational limits of the cryptographic approach.
+\end{enumerate}
+
+The remainder of the paper is organised as follows.
+Section~\ref{sec:lit} reviews related work; Section~\ref{sec:model} defines the
+system, hopping strategies, and threat model; Section~\ref{sec:method} gives the
+learned model, key management, synchronisation, and the authenticated-timing
+layer; Section~\ref{sec:setup} describes the experimental setup;
+Section~\ref{sec:results} reports results; Section~\ref{sec:discussion}
+discusses boundary conditions and limitations; Section~\ref{sec:conclusion}
+concludes.
+
+% ================================================================= 2. RELATED
+\section{Related Work}\label{sec:lit}
+\subsection{TDOA positioning for GPS-denied UAVs}
+Hyperbolic multilateration from arrival-time differences is a mature
+localisation principle: the Chan--Ho closed form~\cite{ref6} gives a
+near-maximum-likelihood estimate, Foy's Taylor-series method~\cite{ref8}
+refines it, and GCC-PHAT~\cite{ref7} estimates the delays; the CRLB bounds the
+achievable accuracy~\cite{ref27,ref29,ref30}, and recursive filters track the
+trajectory~\cite{ref26}. Recent work applies TDOA to UAVs and characterises
+altitude, bandwidth, and NLOS bias~\cite{ref9,ref10,ref15}.
+\emph{Limitation.} This line assumes a benign channel and does not secure the
+positioning waveform against an active jamming, spoofing, or replay adversary.
+
+\subsection{Deep-learning anti-jamming}
+Deep reinforcement learning and convolutional models learn to sense the spectrum
+and hop to clean channels~\cite{ref11,ref12,ref13,ref31}, building on DQN
+control~\cite{ref35} and learned RF signal processing~\cite{ref33,ref34}.
+\emph{Limitation.} A learned policy needs labelled data and training, is
+predictable to an intelligent adversary, and its action space grows with the
+channel count, so scalability to wide-band systems is unaddressed. We reproduce
+the DQN with coarse-grained spectrum prediction of Zhang, Wu and Hu~\cite{ref11}
+as the learned arm of the comparison, since it specifies its ten-channel
+environment and jammer types completely enough to re-implement.
+
+\subsection{Cryptographic and spread-spectrum hopping}
+Cryptographic frequency hopping and spread spectrum are decades-old, proven
+anti-jamming techniques~\cite{ref1,ref4,ref5,ref32}; uncoordinated and keyed
+spread spectrum provide jamming resistance and key
+establishment~\cite{ref2,ref16}, and follower-jamming limits are
+known~\cite{ref3}. \emph{Limitation.} These are studied as communication
+primitives; none is benchmarked against a learned model under one environment,
+nor applied to secure a TDOA \emph{position} estimate. Cryptographic hopping is
+adopted here unchanged, as a proven reference point rather than a contribution.
+
+\subsection{GPS spoofing and meaconing}
+Spoofing and meaconing (delayed replay) are well-documented GNSS
+threats~\cite{ref24,ref25}, and machine learning has been used to detect
+spoofing on UAVs~\cite{ref14}; distance-bounding~\cite{ref23} and message
+authentication~\cite{ref21} are relevant primitives. \emph{Limitation.} A valid
+content signature does not protect arrival-time integrity, so replay can
+corrupt TDOA timing without forging anything, a gap not closed by prior work.
+
+% ================================================================= 3. MODEL
+\section{System and Threat Model}\label{sec:model}
+\subsection{Range noise and the CRLB}
+The per-range estimation standard deviation follows the time-of-arrival
+bound~\cite{ref27}
+\begin{equation}
+\sigma_r = c\,\sigma_\tau, \quad
+\sigma_\tau = \frac{1}{2\sqrt{2}\,\pi\,\sqrt{\mathrm{SNR}}\;\beta},
+\quad \beta = \frac{B}{\sqrt3},
+\label{eq:sigma}
+\end{equation}
+with $c$ the speed of light, $B$ the bandwidth, and $\beta$ the RMS bandwidth.
+The range-difference covariance is
+$\Sigma=\sigma_r^2(I+\mathbf{1}\mathbf{1}^\top)$, and with Jacobian
+$G_{i}=u_i-u_0$ ($u_k$ the unit vector to beacon $k$) the position CRLB is
+\begin{equation}
+\mathrm{CRLB}(p) = \sqrt{\operatorname{tr}\!\big[(G^\top\Sigma^{-1}G)^{-1}\big]},
+\quad
+\eta = \frac{\mathrm{CRLB}}{\mathrm{RMSE}} .
+\label{eq:crlb}
+\end{equation}
+The estimator solves~\eqref{eq:ml} by a Chan--Ho initialiser~\cite{ref6}
+followed by damped (Levenberg--Marquardt) Taylor refinement~\cite{ref8}; under
+NLOS a RANSAC consensus over beacon subsets~\cite{ref28,ref38} rejects biased
+beacons.
+
+\subsection{Hopping strategies}
+Both ends derive the channel from an AES-128 keystream~\cite{ref20,ref22} under
+the shared key $\kappa$ and a synchronised counter,
+\begin{equation}
+c_t = \big(\mathrm{AES}_\kappa(t) \bmod 2^{32}\big) \bmod M ,
+\label{eq:crypto}
+\end{equation}
+which is statistically uniform and unpredictable to any adversary lacking
+$\kappa$. Direct-sequence spread spectrum (DSSS) and uncoordinated spread
+spectrum~\cite{ref2} provide the spread-spectrum baselines, and a public
+pseudo-random hopper and a fixed channel model keyless, predictable strategies.
+DSSS is modelled at the link level by its processing-gain margin: it delivers
+full throughput while the jammed fraction of the band stays below a tolerance
+of $0.34$, and degrades beyond it.
+
+\subsection{Jammer taxonomy and threat model}
+Ten jammer classes span three tiers. Tier~1 is non-adaptive (constant, random
+channel, pulsed, and wideband barrage); Tier~2 is patterned (sweep, comb,
+partial-band); Tier~3 is intelligent (reactive follower, predictive learning
+jammer, smart partial-band). The barrage class denies a fresh random $70\%$ of
+the band each slot and is the only class that exceeds the DSSS processing-gain
+margin; every narrowband class sits below it. The adversary may additionally
+inject forged beacon packets (spoofing) or capture and re-transmit genuine
+packets with an added delay (meaconing replay), the latter corrupting
+arrival-time integrity without forging any content.
+
+% ================================================================= 4. METHOD
+\section{Method}\label{sec:method}
+\subsection{Learned anti-jamming model}
+The DQN observes a sliding window of the per-channel occupancy,
+$s_t\in\{0,1\}^{W\times M}$, and estimates $Q(s_t,a;\theta)$ with one output per
+channel; it acts greedily $c_t=\arg\max_a Q$ and is trained on the immediate
+reward $r_t=\mathbf 1[c_t\notin J_t]$ (one-step / coarse-grained spectrum
+prediction, $\gamma{=}0$) by minimising $\big(Q(s_t,c_t;\theta)-r_t\big)^2$. The
+output layer has $M$ units, so the parameter count and per-decision cost grow as
+$O(M)$.
+
+\subsection{Key management}\label{sec:keys}
+The hop sequence in~\eqref{eq:crypto} is only as available as its key. The
+baseline threat model assumes pre-shared, pre-provisioned keys loaded before the
+mission, which is standard practice for keyed frequency hopping and analogous to
+crypto-fill in fielded radios; no over-the-air exchange is then required. Where
+a key must be established without a pre-shared secret under active jamming,
+jamming-resistant key establishment via uncoordinated frequency
+hopping~\cite{ref16} applies, and authenticated Diffie--Hellman covers a secure
+pre-flight channel. Rekeying is driven by the same counter, yielding fresh
+subkeys per epoch. The security of the scheme rests on key secrecy, which we
+state as an explicit assumption and revisit in Section~\ref{sec:discussion}.
+
+\subsection{Hop synchronisation}\label{sec:sync}
+Correct de-hopping requires beacon and drone to agree on the current hop index.
+Synchronisation is ensured at three levels. First, TDOA already requires the
+beacons to share a common, disciplined timebase, since they are fixed
+infrastructure at known coordinates, so the hop clock reuses that timebase and
+introduces no new synchronisation burden. Second, the drone acquires initial
+synchronisation through an acquisition/sync-word (late-entry) sequence and
+thereafter advances its counter locally. Third, periodic sync-refresh slots and
+a tolerance window absorb clock drift and time-of-flight offset. The tolerance
+is quantified in Section~\ref{sec:results} as a function of hop rate.
+
+\subsection{Authenticated timing}\label{sec:auth}
+Cryptographic hopping defeats jamming (unpredictable sequence) and
+spoofing-by-injection (wrong channel and no valid tag) but not replay: an
+attacker re-transmits a genuine packet with an added delay, corrupting the TDOA
+timing without forging anything. The layer in Algorithm~\ref{alg:auth} composes
+three standard primitives, an HMAC~\cite{ref21}, a freshness nonce, and a
+time-of-flight plausibility test in the manner of distance
+bounding~\cite{ref23}, for the specific purpose of protecting a
+\emph{time-of-arrival} measurement rather than message content. It is deployed
+alongside whatever authentication an existing protocol stack already provides
+and replaces none of it; Section~\ref{sec:results} quantifies why the stack's
+own signature is not sufficient on its own.
+
+\begin{algorithm}[t]
+\caption{Authenticated-timing verification at the drone}\label{alg:auth}
+\begin{algorithmic}[1]
+\Require packet $(\text{id},T_{tx},\text{nonce},\text{tag})$, key $\kappa$,
+arrival $T_{rx}$, geometric delay $\delta$, issued nonce $\nu$, tolerance
+$\tau=3\sigma_r/c$
+\Ensure accept / reject
+\If{$\text{tag}\neq \mathrm{HMAC}_\kappa(\text{id}\,\|\,T_{tx}\,\|\,\text{nonce})$}
+      \State \Return reject \Comment{forged or altered}
+\EndIf
+\If{$\text{nonce}\neq\nu$} \State \Return reject \Comment{stale / replayed}
+\EndIf
+\If{$\lvert T_{rx}-(T_{tx}+\delta)\rvert > \tau$}
+      \State \Return reject \Comment{delayed re-transmission}
+\EndIf
+\State \Return accept
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Evaluation metrics}\label{sec:metrics}
+The jamming-avoidance rate $A$ is given by~\eqref{eq:avoid}; positioning error
+is $\mathrm{RMSE}=\sqrt{\frac1n\sum_i \lVert \hat p_i - p_i\rVert^2}$ with
+efficiency $\eta$ from~\eqref{eq:crlb}; attack success is
+$\rho=\frac1K\sum_k \mathbf 1[\text{attack}_k\ \text{accepted}\wedge\text{harmful}]$;
+normalized throughput is the per-slot delivered fraction; and per-decision
+energy is $E=\text{MACs}\times e_{\mathrm{MAC}}$~\cite{ref39} for the DQN versus
+one AES block for cryptographic hopping.
+
+% ================================================================= 5. SETUP
+\section{Experimental Setup}\label{sec:setup}
+The simulator is self-contained and CPU-only (Python, NumPy/SciPy, the
+\texttt{cryptography} library); the DQN is a from-scratch NumPy network (window
+$W{=}16$, hidden $64$, Adam, replay $2000$, batch $32$), which makes its $O(M)$
+scaling cost a measured quantity rather than an assertion. Positioning uses
+$N{=}8$ ground beacons on a $1$\,km hexagon with mast-height diversity and a
+drone at $\sim\!300$\,m. Spectrum episodes are $500$ slots; anti-jam results
+average $30$ seeds, the equal-wall-clock scaling arm $10$ seeds, and the
+equal-gradient-step arm $3$ seeds; every run is reproducible from a fixed seed.
+Channel scales are $\{10,100,1000,2320\}$, the last being the SINCGARS
+30--88\,MHz/25\,kHz configuration~\cite{ref17}. The labelled spectrum-occupancy
+dataset (Fig.~\ref{fig:dataset}) is released with the code.
+
+\begin{figure}[t]\centering
+\includegraphics[width=\linewidth]{fig_dataset.png}
+\caption{Released spectrum-occupancy dataset: per-slot channel state (jammed in
+black) for the ten jammer classes; over a sliding window this is the DQN input.}
+\label{fig:dataset}
+\end{figure}
+
+% ================================================================= 6. RESULTS
+\section{Results}\label{sec:results}
+\subsection{Positioning accuracy against the CRLB}
+The maximum-likelihood estimator attains the CRLB in LOS across the SNR range
+(efficiency $\eta\!\approx\!0.97$--$1.0$; RMSE $7.8$\,m vs CRLB $8.2$\,m at
+$20$\,dB), and a signal-level GCC-PHAT check validates the noise model
+(empirical/analytic $\sigma_r$ ratio $1.03$). NLOS error is heavy-tailed, so we
+report the median: RANSAC mitigation reduces it from $133$\,m to $33$\,m at
+$20$\,dB and from $148$\,m to $7.4$\,m at $30$\,dB (Table~\ref{tab:tdoa},
+Fig.~\ref{fig:tdoa}).
+
+\begin{table}[t]\centering
+\caption{TDOA positioning (metres). LOS reaches the CRLB; RANSAC mitigation
+cuts NLOS median error up to $20\times$.}\label{tab:tdoa}\small
+\begin{tabular}{lcccc}\toprule
+\textbf{SNR} & \textbf{LOS} & \textbf{CRLB} & \textbf{NLOS} & \textbf{NLOS} \\
+\textbf{(dB)} & \textbf{RMSE} & & \textbf{median} & \textbf{+ mitig.} \\ \midrule
+10 & 26.8 & 26.6 & 138.4 & 67.8 \\
+20 & \phantom{0}7.8 & \phantom{0}8.2 & 133.2 & 33.3 \\
+30 & \phantom{0}2.7 & \phantom{0}2.6 & 147.7 & \phantom{0}7.4 \\ \bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]\centering
+\includegraphics[width=0.86\linewidth]{fig_tdoa_crlb.png}
+\caption{Positioning error vs SNR. LOS RMSE hugs the CRLB; NLOS mitigation
+(median) approaches it as SNR grows.}\label{fig:tdoa}
+\end{figure}
+
+\subsection{Anti-jamming across the taxonomy}
+Against the ten-class taxonomy, cryptographic hopping avoids collisions with a
+rate that rises with $M$ (mean avoidance \cryptoMeanLo$\,\to\,$\cryptoMeanHi)
+and, crucially, resists the intelligent adversary: against the learning jammer
+its avoidance is \cryptoLearnLo$\,\to\,$\cryptoLearnHi\ while predictable
+public-random and fixed hopping collapse to $0.0$ (Fig.~\ref{fig:heat}). This is
+the operational meaning of cryptographic unpredictability, and it is what a
+keyless pseudo-random hopper cannot provide.
+
+The taxonomy also bounds the spread-spectrum baseline. DSSS is unaffected by
+every narrowband class, because none of them exceeds its processing-gain
+margin, but wideband barrage denies $70\%$ of the band at once, drops DSSS
+throughput to \dsssBarrageTput, and takes its avoidance to $0.0$. No hopping
+strategy fares better in that column: with $70\%$ of the band denied, every
+hopper, cryptographic or otherwise, is reduced to \barrageAvoid. Barrage is
+therefore the one adversary in the study that defeats both families, which is
+the expected consequence of spreading jamming power across the entire band
+rather than concentrating it.
+
+\begin{figure}[t]\centering
+\includegraphics[width=\linewidth]{fig_antijam_heatmap.png}
+\caption{Jamming-avoidance rate by strategy and jammer ($M{=}10$). DSSS is
+robust across every narrowband class and fails only against wideband barrage;
+fixed hopping fails broadly.}\label{fig:heat}
+\end{figure}
+
+\subsection{Learned versus cryptographic hopping at scale}
+The DQN, when it can be trained, beats cryptographic hopping on structured
+adversaries, since it learns to occupy clean channels. Its advantage inverts as
+$M$ scales. Under a fixed $20$\,s compute budget, avoidance falls from
+\dqnBudgetTen\ at $M{=}10$ to \dqnBudgetKilo\ at $M{=}1000$, while training
+throughput collapses from \stepsLo\ to \stepsHi\ steps/s and the parameter count
+grows from $\paramsLo$ to $\paramsHi$ (Table~\ref{tab:scale},
+Figs.~\ref{fig:cross}--\ref{fig:conv}). Cryptographic hopping is unaffected at
+\cryptoScale\ and needs no training.
+
+Because a fixed wall-clock budget starves the wide-band models by construction,
+we repeat the experiment with the budget removed and the number of gradient
+updates held constant across all $M$. This second arm isolates the part of the
+degradation that belongs to the learning problem rather than to the allowance:
+equalising updates gives \dqnStepTen\ at $M{=}10$ and \dqnStepKilo\ at
+$M{=}1000$. Fig.~\ref{fig:conv} reports the same effect as a cost, the training
+required to reach a fixed competence level of $0.90$ avoidance, which is the
+quantity a deployment actually has to pay.
+
+\begin{table}[t]\centering
+\caption{Deep learning at scale against an adaptive $30\%$ jammer, under an
+equal-wall-clock budget ($10$ seeds) and equal gradient steps ($3$ seeds).}
+\label{tab:scale}\small
+\begin{tabular}{lcccc}\toprule
+\textbf{$M$} & \textbf{DQN} & \textbf{DQN} & \textbf{Crypto} & \textbf{Train} \\
+ & \textbf{(20\,s)} & \textbf{(equal steps)} & & \textbf{steps/s} \\ \midrule
+% BEGIN-SCALING-ROWS
+10   & 0.91 & 0.82 & 0.70 & 2,407 \\
+100  & 0.75 & 0.72 & 0.70 & \phantom{00}290 \\
+% END-SCALING-ROWS
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]\centering
+\includegraphics[width=0.94\linewidth]{fig_scaling_crossover.png}
+\caption{Avoidance as channels scale, under both training regimes, against the
+training-free baseline.}\label{fig:cross}
+\end{figure}
+
+\begin{figure}[t]\centering
+\includegraphics[width=0.94\linewidth]{fig_scaling_cost.png}
+\caption{$O(M)$ growth in parameters and the corresponding collapse in training
+throughput.}\label{fig:scost}
+\end{figure}
+
+\begin{figure}[t]\centering
+\includegraphics[width=0.94\linewidth]{fig_scaling_convergence.png}
+\caption{Training cost of reaching a fixed competence level ($0.90$ avoidance)
+as the channel count grows.}\label{fig:conv}
+\end{figure}
+
+\subsection{Securing the position, and its cost}
+Table~\ref{tab:sec} and Fig.~\ref{fig:sec} report attack-success rates.
+Cryptographic hopping alone reduces injection spoofing to $\approx\!1/M$ but
+leaves replay at $1.0$; adding a message signature stops spoofing yet a valid
+signature still loses to meaconing (replay $1.0$), because it does not protect
+arrival-time integrity. The authenticated-timing layer drives both spoofing and
+replay to $0.0$. Per decision, cryptographic hopping costs a single AES block
+($\approx\!13$\,pJ) against $0.04$--$9.3$\,$\mu$J for DL inference, a factor up
+to $\costRatio$, and it requires no training (Fig.~\ref{fig:cost}).
+Synchronisation tolerates a clock offset up to half the hop dwell ($3.66$\,ms,
+$366$\,$\mu$s, $36.6$\,$\mu$s at $100/1000/10000$ hops/s), with resync latencies
+of $80/8/0.8$\,ms (Fig.~\ref{fig:sync}).
+
+\begin{table}[t]\centering
+\caption{Attack-success rate by security layer ($M{=}100$). A valid signature
+does not stop replay; authenticated timing does.}\label{tab:sec}\small
+\begin{tabular}{lcc}\toprule
+\textbf{Layer} & \textbf{Spoofing} & \textbf{Replay} \\ \midrule
+None                          & 1.00 & 1.00 \\
+Crypto hopping only           & 0.01 & 1.00 \\
+Crypto + signature only       & 0.00 & 1.00 \\
+Crypto + authenticated timing & 0.00 & 0.00 \\ \bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]\centering
+\includegraphics[width=0.94\linewidth]{fig_security.png}
+\caption{Attack success by security layer.}\label{fig:sec}
+\end{figure}
+
+\begin{figure}[t]\centering
+\includegraphics[width=0.94\linewidth]{fig_cost.png}
+\caption{Per-decision energy: cryptographic hop generation versus deep-learning
+inference.}\label{fig:cost}
+\end{figure}
+
+\begin{figure}[t]\centering
+\includegraphics[width=0.94\linewidth]{fig_sync.png}
+\caption{Hop-synchronisation drift tolerance and resynchronisation latency
+versus hop rate.}\label{fig:sync}
+\end{figure}
+
+\subsection{Statistical validation}
+All comparisons use independently seeded runs. Differences are assessed with the
+paired $t$-test and the non-parametric Wilcoxon signed-rank test~\cite{ref36},
+with $95\%$ bootstrap confidence intervals and Cohen's $d$ effect
+size~\cite{ref37}, at $\alpha{=}0.05$ with Bonferroni correction over the
+reported family. Table~\ref{tab:stat} confirms that cryptographic hopping
+significantly exceeds the learned model at $M{=}1000$ and the keyless baselines
+against the intelligent jammer, while the learned model significantly exceeds
+cryptographic hopping at $M{=}10$, quantifying the crossover rather than
+asserting a single winner.
+
+\begin{table}[t]\centering
+\caption{Significance of headline comparisons (paired $t$-test, Bonferroni
+corrected). Positive mean difference favours the first method.}
+\label{tab:stat}\small
+\begin{tabular}{llccc}\toprule
+\textbf{Comparison} & \textbf{Condition} & \textbf{diff} & \textbf{$p$} & \textbf{$d$} \\ \midrule
+crypto $>$ DQN & $M{=}1000$ & $+0.61$ & $<0.001$ & $3.29$ \\
+DQN $>$ crypto & $M{=}10$   & $+0.22$ & $<10^{-9}$ & $24.3$ \\
+crypto $>$ random & learning jam. & $+0.99$ & $<0.001$ & $\gg 1$ \\ \bottomrule
+\end{tabular}
+\end{table}
+
+% ================================================================= 7. DISCUSSION
+\section{Discussion}\label{sec:discussion}
+\subsection{Boundary conditions}
+The findings are boundary-conditioned. A learned policy is the better
+anti-jammer \emph{when} the channel count is small and training is affordable
+and \emph{when} the adversary is not itself adaptive to the policy; it exploits
+structure that a blind keyed hopper ignores. Cryptographic hopping wins
+\emph{when} the band is wide (its collision probability $\to 0$ as $M$ grows),
+\emph{when} training is impractical, and \emph{when} the adversary is
+intelligent, because unpredictability is a property of key secrecy, not of data.
+Only the cryptographic path additionally secures the \emph{position}: combined
+with authenticated timing it defeats jamming, spoofing, and replay together,
+which a communication-only learned hopper does not attempt.
+
+\subsection{Limits of the cryptographic approach}
+The cost analysis settles one common objection, that cryptography is as
+expensive as deep learning: generating a hop index is a single AES block, orders
+of magnitude below a neural forward pass and free of any training. The real
+costs are operational rather than computational, and they are not free.
+\emph{Key distribution} is a logistical burden: keys must be provisioned before
+the mission and re-provisioned when compromised, and the pre-shared assumption
+of Section~\ref{sec:keys} is exactly what an adversary with physical access
+attacks. \emph{Key secrecy is a single point of failure}: a disclosed key
+converts the unpredictable hopper into the predictable one, which the learning
+jammer drives to $0.0$ avoidance. \emph{Synchronisation must be maintained}, and
+a drone that loses it pays the resynchronisation latency of
+Section~\ref{sec:results} before it can receive at all. Finally, the
+cryptographic hopper is \emph{blind}: it cannot exploit exploitable structure in
+the jammer, which is precisely why the learned model wins at small $M$. Neither
+approach answers wideband barrage, which defeats both.
+
+\subsection{Threats to validity}
+\emph{Construct validity.} The jammer--hopper interaction is simulated at the
+channel-occupancy level; a signal-level GCC-PHAT check validates the range-noise
+model, but full RF propagation and hardware imperfections are abstracted. Two
+consequences are worth stating plainly. The DSSS baseline is modelled by a
+processing-gain tolerance and therefore represents an upper bound on what a real
+DSSS receiver achieves. Conversely, the barrage jammer pays no penalty in this
+model for spreading its power across the whole band, whereas a real barrage
+adversary trades per-channel power density for coverage; the barrage column is
+therefore pessimistic for the defenders and should be read as a bound, not a
+prediction.
+\emph{Internal validity.} The scaling result is reported under both a fixed
+wall-clock budget and a fixed number of gradient updates precisely because the
+first alone would confound the budget with the learning problem; the $O(M)$
+growth in parameters and per-step cost is architectural and holds under either.
+\emph{External validity.} Results are simulation-based with a single beacon
+geometry and a ten-class taxonomy; field behaviour may differ, and
+hardware-in-the-loop validation remains future work.
+\emph{Conclusion validity.} Multiple seeds, paired significance tests,
+confidence intervals, and Bonferroni correction guard against chance findings;
+NLOS metrics use medians because the error is heavy-tailed.
+
+% ================================================================= 8. CONCLUSION
+\section{Conclusion}\label{sec:conclusion}
+We benchmarked a reproduced deep-Q anti-jamming model against training-free
+cryptographic frequency hopping for GPS-denied drone TDOA positioning, under one
+environment, dataset, and metric suite. The learned model matches or beats
+cryptographic hopping at small channel counts but degrades as channels scale,
+under both an equal-wall-clock and an equal-gradient-step regime, whereas
+cryptographic hopping stays effective, training-free, and unpredictable, and,
+with an authenticated-timing layer, secures the position against jamming,
+spoofing, and replay together at pico-joule cost. The maximum-likelihood TDOA
+estimator reaches the CRLB, and NLOS mitigation recovers most of the loss.
+Extending the taxonomy to wideband barrage bounds both families: it is the one
+adversary that defeats spread spectrum and hopping alike. We release the
+datasets, code, and benchmark. Future work extends the study to signal-level
+propagation, hardware-in-the-loop trials, and adaptive-adversary co-training.
+
+% ================================================================= REFERENCES
+\begin{thebibliography}{99}
+\input{_bib.tex}
+\end{thebibliography}
+
+\end{document}

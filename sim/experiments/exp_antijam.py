@@ -39,18 +39,37 @@ def run(scales=config.CHANNEL_SCALES, n_seeds=config.N_SEEDS):
     return df
 
 
+# Readable axis labels for the strategy keys used in the results tables.
+PRETTY = {
+    "crypto": "Cryptographic hop",
+    "random": "Public random hop",
+    "fixed": "Fixed channel",
+    "dsss": "DSSS",
+    "uss": "Uncoordinated SS",
+}
+
+
 def _heatmap(df, M=config.CHANNEL_SCALES[0]):
     sub = df[df.M == M].pivot(index="strategy", columns="jammer", values="avoidance")
     sub = sub.reindex(index=strat.NONLEARNED, columns=taxonomy.ALL_JAMMERS)
-    fig, ax = plt.subplots(figsize=(8.4, 3.6))
+    fig, ax = plt.subplots(figsize=(9.0, 3.9))
     im = ax.imshow(sub.values, cmap="RdYlGn", vmin=0, vmax=1, aspect="auto")
-    ax.set_xticks(range(len(sub.columns))); ax.set_xticklabels(sub.columns, rotation=40, ha="right")
-    ax.set_yticks(range(len(sub.index))); ax.set_yticklabels(sub.index)
+    ax.set_xticks(range(len(sub.columns)))
+    ax.set_xticklabels(sub.columns, rotation=40, ha="right")
+    ax.set_yticks(range(len(sub.index)))
+    ax.set_yticklabels([PRETTY.get(s, s) for s in sub.index])
     for i in range(sub.shape[0]):
         for j in range(sub.shape[1]):
-            ax.text(j, i, f"{sub.values[i, j]:.2f}", ha="center", va="center", fontsize=7)
-    ax.set_title(f"Jamming-avoidance rate (M={M})")
-    fig.colorbar(im, ax=ax, fraction=0.025, pad=0.02)
+            v = sub.values[i, j]
+            # white on the dark ends of the ramp, black in the middle
+            ax.text(j, i, f"{v:.2f}", ha="center", va="center", fontsize=7,
+                    color="white" if (v < 0.22 or v > 0.88) else "black")
+    ax.set_xlabel("Jammer class")
+    ax.set_ylabel("Hopping / spreading strategy")
+    ax.set_title(f"Jamming-avoidance rate by strategy and jammer "
+                 f"(M={M} channels; 1.00 = never jammed)")
+    cb = fig.colorbar(im, ax=ax, fraction=0.025, pad=0.02)
+    cb.set_label("Jamming-avoidance rate", fontsize=8)
     fig.tight_layout()
     for d in (config.FIG_DIR, config.PAPER_FIG_DIR):
         fig.savefig(d / "fig_antijam_heatmap.png", dpi=200)

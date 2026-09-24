@@ -51,16 +51,24 @@ def run():
 
 
 def _plot(df):
-    fig, ax = plt.subplots(figsize=(6.2, 4.2))
+    # Plotted against ABSOLUTE offset. Normalising by dwell collapses every hop
+    # rate onto one curve, which hides the point: the faster the hopping, the
+    # tighter the clock requirement in real time.
+    fig, ax = plt.subplots(figsize=(6.4, 4.2))
     for hr in HOP_RATES:
-        sub = df[df.hop_rate == hr]
-        ax.plot(sub.offset_us / sub.dwell_us, sub.success, "-o", ms=3,
-                label=f"{hr} hops/s")
+        sub = df[(df.hop_rate == hr) & (df.offset_us > 0)]
+        dwell = float(sub.dwell_us.iloc[0])
+        ax.semilogx(sub.offset_us, sub.success, "-o", ms=3.5,
+                    label=f"{hr:,} hops/s (dwell {dwell:,.0f} $\\mu$s)")
     ax.axhline(0.99, ls=":", color="k", alpha=0.6)
-    ax.set_xlabel("Clock offset (fraction of hop dwell)")
+    ax.text(ax.get_xlim()[0] * 1.1, 0.965, "99% de-hop success",
+            fontsize=8, color="0.3")
+    ax.set_xlabel("Clock offset between beacon and drone ($\\mu$s, log scale)")
     ax.set_ylabel("De-hop success rate")
-    ax.set_title("Synchronization drift tolerance")
-    ax.grid(True, ls=":", alpha=0.5); ax.legend()
+    ax.set_ylim(-0.05, 1.12)
+    ax.set_title("Hop-synchronization drift tolerance by hop rate")
+    ax.grid(True, which="both", ls=":", alpha=0.5)
+    ax.legend(loc="lower left", fontsize=8, framealpha=0.95)
     fig.tight_layout()
     for d in (config.FIG_DIR, config.PAPER_FIG_DIR):
         fig.savefig(d / "fig_sync.png", dpi=200)

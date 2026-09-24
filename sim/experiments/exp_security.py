@@ -76,15 +76,27 @@ def run(scales=config.CHANNEL_SCALES, n=2000):
 def _plot(df, M=config.CHANNEL_SCALES[1]):
     sub = df[df.M == M]
     x = np.arange(len(at.LAYERS)); w = 0.38
-    fig, ax = plt.subplots(figsize=(6.6, 4.2))
-    ax.bar(x - w / 2, sub.spoof_success, w, label="Spoofing")
-    ax.bar(x + w / 2, sub.replay_success, w, label="Replay / meaconing")
+    fig, ax = plt.subplots(figsize=(7.0, 4.4))
+    b1 = ax.bar(x - w / 2, sub.spoof_success, w, label="Spoofing (forged beacon)")
+    b2 = ax.bar(x + w / 2, sub.replay_success, w,
+                label="Replay / meaconing (delayed re-transmission)")
+    # A 0.00 bar has no height, so label every bar: otherwise "defeated" and
+    # "not measured" look identical.
+    ax.bar_label(b1, fmt="%.2f", fontsize=8, padding=2)
+    ax.bar_label(b2, fmt="%.2f", fontsize=8, padding=2)
     ax.set_xticks(x); ax.set_xticklabels([l.replace("_", "\n") for l in at.LAYERS])
-    ax.set_ylabel("Attack-success rate"); ax.set_ylim(0, 1.05)
-    ax.set_title(f"Attack success by security layer (M={M})")
-    ax.legend(); ax.grid(True, axis="y", ls=":", alpha=0.5)
-    ax.annotate("valid signature\nstill loses to replay", xy=(2 + w / 2, 1.0),
-                xytext=(1.2, 0.7), fontsize=8,
+    ax.set_xlabel("Security layer applied (cumulative)")
+    ax.set_ylabel("Attack-success rate")
+    ax.set_ylim(0, 1.40)                      # headroom so the legend clears the bars
+    ax.set_title(f"Attack success by security layer (M={M} channels)")
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, 1.0), fontsize=8,
+              framealpha=0.95)
+    ax.grid(True, axis="y", ls=":", alpha=0.5)
+    # Placed in the empty upper-right quadrant: the bars occupy the left three
+    # groups up to y=1.0 and the legend sits above y=1.25.
+    ax.annotate("a valid signature\nstill loses to replay",
+                xy=(2 + w / 2, 1.04), xytext=(2.52, 1.09), fontsize=8,
+                color="crimson", ha="left",
                 arrowprops=dict(arrowstyle="->", color="crimson"))
     fig.tight_layout()
     for d in (config.FIG_DIR, config.PAPER_FIG_DIR):

@@ -53,8 +53,18 @@ def _train_arm(M, n_seeds, *, time_budget, max_steps):
     }
 
 
-def run(scales=config.CHANNEL_SCALES):
+def run(scales=config.CHANNEL_SCALES, resume=True):
+    # Each channel count costs up to hours, so every completed M is checkpointed
+    # immediately. A crash, a reboot, or a kill then costs one M, not the run.
+    ckpt = config.DATA_DIR / "scaling_partial.csv"
     rows = []
+    if resume and ckpt.exists():
+        rows = pd.read_csv(ckpt).to_dict("records")
+        done = {int(r["M"]) for r in rows}
+        if done:
+            print(f"   resuming: {sorted(done)} already complete")
+        scales = [m for m in scales if m not in done]
+
     for M in scales:
         budget = _train_arm(M, N_SEEDS_DQN, time_budget=BUDGET_S, max_steps=200000)
         matched = _train_arm(M, N_SEEDS_STEP, time_budget=None, max_steps=STEP_MATCHED)
@@ -89,8 +99,11 @@ def run(scales=config.CHANNEL_SCALES):
         r = rows[-1]
         print(f"   M={M:5} budget={r['dqn_avoidance']:.2f}+-{r['dqn_avoidance_sd']:.2f} "
               f"step-matched={r['dqn_steps_avoidance']:.2f}+-{r['dqn_steps_avoidance_sd']:.2f} "
-              f"crypto={cav:.2f} steps/s={r['steps_per_sec']:.0f} params={r['params']}")
-    df = pd.DataFrame(rows)
+              f"crypto={cav:.2f} steps/s={r['steps_per_sec']:.0f} params={r['params']}",
+              flush=True)
+        pd.DataFrame(rows).to_csv(ckpt, index=False)      # checkpoint this M
+
+    df = pd.DataFrame(rows).sort_values("M").reset_index(drop=True)
     utils.save_table(df, "scaling_results")
     _plots(df)
     return df
@@ -115,41 +128,53 @@ def _plots(df):
         fig.savefig(d / "fig_scaling_crossover.png", dpi=200)
     plt.close(fig)
 
-    # cost
-    fig, ax = plt.subplots(figsize=(6.2, 4.2))
-    ax.loglog(df.M, df.params, "o-", label="DQN parameters (O(M))")
-    ax2 = ax.twinx()
-    ax2.loglog(df.M, df.steps_per_sec, "s--", color="tab:red",
-               label="training steps / s")
-    ax.set_xlabel("Number of channels M"); ax.set_ylabel("Parameter count")
-    ax2.set_ylabel("Training steps per second", color="tab:red")
-    ax.set_title("Deep-learning training cost vs channel count")
-    ax.grid(True, which="both", ls=":", alpha=0.5)
-    fig.tight_layout()
+    # cost -- two single-axis panels. A twin-axis version of this plot cannot be
+    # read without a legend telling you which curve belongs to which scale.
+    fig, (axL, axR) = plt.subplots(1, 2, figsize=(9.0, 3.9))
+    axL.loglog(df.M, df.params, "o-", color="tab:blue")
+    axL.set_xlabel("Number of channels M")
+    axL.set_ylabel("Trainable parameters")
+    axL.set_title("Model size grows as $O(M)$", fontsize=10)
+    axL.grid(True, which="both", ls=":", alpha=0.5)
+    for x, y in zip(df.M, df.params):
+        axL.annotate(f"{int(y):,}", (x, y), textcoords="offset points",
+                     xytext=(0, -13), fontsize=7, ha="center")
+
+    axR.loglog(df.M, df.steps_per_sec, "s-", color="tab:red")
+    axR.set_xlabel("Number of channels M")
+    axR.set_ylabel("Training throughput (gradient steps per second)")
+    axR.set_title("Training throughput collapses", fontsize=10)
+    axR.grid(True, which="both", ls=":", alpha=0.5)
+    for x, y in zip(df.M, df.steps_per_sec):
+        axR.annotate(f"{y:,.0f}", (x, y), textcoords="offset points",
+                     xytext=(0, 8), fontsize=7, ha="center")
+    fig.suptitle("Deep-learning training cost vs channel count", fontsize=11)
+    fig.tight_layout(rect=[0, 0, 1, 0.94])
     for d in (config.FIG_DIR, config.PAPER_FIG_DIR):
         fig.savefig(d / "fig_scaling_cost.png", dpi=200)
     plt.close(fig)
 
-    # convergence -- cost of reaching a fixed competence level
-    fig, ax = plt.subplots(figsize=(6.2, 4.2))
+    # convergence -- one unit only (gradient steps). Plotting steps and seconds
+    # on a shared axis makes the y-value ambiguous.
+    fig, ax = plt.subplots(figsize=(6.4, 4.2))
     ok = df.dropna(subset=["steps_to_converge"])
+    missed = df[df.steps_to_converge.isna()]
     if not ok.empty:
         ax.loglog(ok.M, ok.steps_to_converge, "o-", color="tab:purple",
-                  label="steps to reach 0.90 avoidance")
-        secs_per_step = ok.steps_arm_seconds / ok.steps_arm_steps
-        ax.loglog(ok.M, ok.steps_to_converge * secs_per_step, "^--",
-                  color="tab:brown", label="equivalent training seconds")
-    missed = df[df.steps_to_converge.isna()]
-    for _, r in missed.iterrows():
-        ax.axvline(r.M, color="tab:red", ls=":", alpha=0.6)
+                  label="Gradient steps to first reach 0.90 avoidance")
+        for x, y in zip(ok.M, ok.steps_to_converge):
+            ax.annotate(f"{y:,.0f}", (x, y), textcoords="offset points",
+                        xytext=(0, 9), fontsize=7, ha="center")
     if not missed.empty:
-        ax.plot([], [], color="tab:red", ls=":",
-                label="never reached 0.90 (M = "
-                      + ", ".join(str(int(m)) for m in missed.M) + ")")
+        ceiling = (ok.steps_to_converge.max() if not ok.empty else 1.0)
+        ax.scatter(missed.M, [ceiling * 3] * len(missed), marker="x", s=70,
+                   color="tab:red", zorder=4,
+                   label=f"Never reached 0.90 within {STEP_MATCHED:,} steps")
     ax.set_xlabel("Number of channels M")
-    ax.set_ylabel("Cost to reach 0.90 avoidance")
+    ax.set_ylabel("Gradient steps to reach 0.90 avoidance")
     ax.set_title("Training cost of a fixed competence level")
-    ax.grid(True, which="both", ls=":", alpha=0.5); ax.legend(fontsize=8)
+    ax.grid(True, which="both", ls=":", alpha=0.5)
+    ax.legend(fontsize=8, loc="upper left", framealpha=0.95)
     fig.tight_layout()
     for d in (config.FIG_DIR, config.PAPER_FIG_DIR):
         fig.savefig(d / "fig_scaling_convergence.png", dpi=200)
