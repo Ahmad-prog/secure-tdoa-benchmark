@@ -16,6 +16,7 @@ import matplotlib.pyplot as plt
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
 from .. import config, utils
+from ..plotstyle import COL_W, PAGE_W
 
 E_MAC = 3.7e-12                   # J per multiply-accumulate (Horowitz, 45 nm class)
 E_AES_BLOCK_HW = 1.3e-11          # J per AES-128 block on hardware AES (~0.8 pJ/byte)
@@ -72,17 +73,16 @@ def run(scales=config.CHANNEL_SCALES):
 
 
 def _plot(df):
-    fig, ax = plt.subplots(figsize=(6.2, 4.2))
+    fig, ax = plt.subplots(figsize=(COL_W, 2.6))
     ax.loglog(df.M, df.dqn_energy_J * 1e6, "o-", label="DQN inference")
     ax.axhline(df.crypto_energy_J.iloc[0] * 1e6, ls="--", color="tab:green",
                label="Cryptographic hop (AES block)")
-    ax.set_xlabel("Number of channels M")
+    ax.set_xlabel("Number of channels $M$")
     ax.set_ylabel("Energy per decision ($\\mu$J)")
-    ax.set_title("Per-decision energy: crypto vs deep-learning inference")
-    ax.grid(True, which="both", ls=":", alpha=0.5); ax.legend()
+    ax.grid(True, which="both", ls=":", alpha=0.5); ax.legend(loc="upper left")
     fig.tight_layout()
     for d in (config.FIG_DIR, config.PAPER_FIG_DIR):
-        fig.savefig(d / "fig_cost.png", dpi=200)
+        fig.savefig(d / "fig_cost.png")
     plt.close(fig)
     print("  wrote figures/fig_cost.png")
 

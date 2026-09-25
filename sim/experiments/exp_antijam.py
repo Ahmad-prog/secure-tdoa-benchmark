@@ -12,6 +12,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 from .. import config, utils, spectrum
+from ..plotstyle import COL_W, PAGE_W
 from ..jammers import taxonomy
 from ..hopping import strategies as strat
 
@@ -52,7 +53,7 @@ PRETTY = {
 def _heatmap(df, M=config.CHANNEL_SCALES[0]):
     sub = df[df.M == M].pivot(index="strategy", columns="jammer", values="avoidance")
     sub = sub.reindex(index=strat.NONLEARNED, columns=taxonomy.ALL_JAMMERS)
-    fig, ax = plt.subplots(figsize=(9.0, 3.9))
+    fig, ax = plt.subplots(figsize=(0.9 * PAGE_W, 2.7))   # printed at 0.9 textwidth
     im = ax.imshow(sub.values, cmap="RdYlGn", vmin=0, vmax=1, aspect="auto")
     ax.set_xticks(range(len(sub.columns)))
     ax.set_xticklabels(sub.columns, rotation=40, ha="right")
@@ -62,17 +63,15 @@ def _heatmap(df, M=config.CHANNEL_SCALES[0]):
         for j in range(sub.shape[1]):
             v = sub.values[i, j]
             # white on the dark ends of the ramp, black in the middle
-            ax.text(j, i, f"{v:.2f}", ha="center", va="center", fontsize=7,
+            ax.text(j, i, f"{v:.2f}", ha="center", va="center", fontsize=6.5,
                     color="white" if (v < 0.22 or v > 0.88) else "black")
     ax.set_xlabel("Jammer class")
     ax.set_ylabel("Hopping / spreading strategy")
-    ax.set_title(f"Jamming-avoidance rate by strategy and jammer "
-                 f"(M={M} channels; 1.00 = never jammed)")
     cb = fig.colorbar(im, ax=ax, fraction=0.025, pad=0.02)
-    cb.set_label("Jamming-avoidance rate", fontsize=8)
+    cb.set_label("Avoidance rate (1 = never jammed)", fontsize=7)
     fig.tight_layout()
     for d in (config.FIG_DIR, config.PAPER_FIG_DIR):
-        fig.savefig(d / "fig_antijam_heatmap.png", dpi=200)
+        fig.savefig(d / "fig_antijam_heatmap.png")
     plt.close(fig)
     print("  wrote figures/fig_antijam_heatmap.png")
 

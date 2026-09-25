@@ -12,6 +12,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 from .. import config, utils
+from ..plotstyle import COL_W, PAGE_W
 from ..tdoa import geometry as geo, crlb, estimators, noise as noisemod, gccphat
 
 
@@ -57,7 +58,7 @@ def run(n_trials: int = config.N_TRIALS):
 
 
 def _plot(df: pd.DataFrame):
-    fig, ax = plt.subplots(figsize=(6.2, 4.2))
+    fig, ax = plt.subplots(figsize=(COL_W, 2.6))
     # LOS: RMSE hugs the CRLB. NLOS error is heavy-tailed, so median is the
     # meaningful statistic (standard practice in the localization literature).
     los = df[df.condition == "LOS"]
@@ -67,12 +68,11 @@ def _plot(df: pd.DataFrame):
     mit = df[df.condition == "NLOS+mitigation"]
     ax.semilogy(mit.snr_db, mit.median_m, "-.^", label="NLOS + mitigation (median)")
     ax.semilogy(los.snr_db, los.crlb_m, "k:", label="CRLB")
-    ax.set_xlabel("SNR (dB)"); ax.set_ylabel("Position RMSE (m)")
-    ax.set_title("TDOA positioning accuracy vs CRLB")
-    ax.grid(True, which="both", ls=":", alpha=0.5); ax.legend()
+    ax.set_xlabel("SNR (dB)"); ax.set_ylabel("Position error (m)")
+    ax.grid(True, which="both", ls=":", alpha=0.5); ax.legend(loc="lower left")
     fig.tight_layout()
     for d in (config.FIG_DIR, config.PAPER_FIG_DIR):
-        fig.savefig(d / "fig_tdoa_crlb.png", dpi=200)
+        fig.savefig(d / "fig_tdoa_crlb.png")
     plt.close(fig)
     print("  wrote figures/fig_tdoa_crlb.png")
 

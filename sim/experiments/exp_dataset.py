@@ -16,6 +16,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 from .. import config, utils, spectrum
+from ..plotstyle import COL_W, PAGE_W
 from ..jammers import taxonomy
 
 
@@ -44,22 +45,25 @@ def _plot(arrays, M, slots):
     names = [j for j in taxonomy.ALL_JAMMERS if j in arrays]
     ncol = 5 if len(names) > 9 else 3
     nrow = int(np.ceil(len(names) / ncol))
-    fig, axes = plt.subplots(nrow, ncol, figsize=(2.7 * ncol, 2.5 * nrow),
-                             squeeze=False)
-    for ax, jam in zip(axes.ravel(), names):
+    # Printed at full text width; shared axes so only the outer panels carry
+    # axis labels, which is what lets ten panels fit legibly.
+    fig, axes = plt.subplots(nrow, ncol, figsize=(PAGE_W, 1.45 * nrow + 0.25),
+                             squeeze=False, sharex=True, sharey=True)
+    for k, (ax, jam) in enumerate(zip(axes.ravel(), names)):
         ax.imshow(arrays[jam].T, aspect="auto", cmap="Greys", vmin=0, vmax=1,
                   interpolation="nearest", origin="lower")
-        ax.set_title(f"{jam}  [{taxonomy.TIERS[jam]} tier]", fontsize=9)
-        ax.set_xlabel("Slot index", fontsize=8)
-        ax.set_ylabel("Channel index", fontsize=8)
-        ax.tick_params(labelsize=7)
+        ax.set_title(f"{jam} ({taxonomy.TIERS[jam]})", fontsize=7, pad=2)
+        ax.tick_params(labelsize=6, length=2)
+        row, col = divmod(k, ncol)
+        if row == nrow - 1:
+            ax.set_xlabel("Slot", fontsize=7)
+        if col == 0:
+            ax.set_ylabel("Channel", fontsize=7)
     for ax in axes.ravel()[len(names):]:          # blank any unused cell
         ax.axis("off")
-    fig.suptitle(f"Spectrum-occupancy dataset: jammed channels black, clean "
-                 f"white ({slots} slots x {M} channels per class)", fontsize=11)
-    fig.tight_layout(rect=[0, 0, 1, 0.95])
+    fig.tight_layout(pad=0.3, w_pad=0.4, h_pad=0.6)
     for d in (config.FIG_DIR, config.PAPER_FIG_DIR):
-        fig.savefig(d / "fig_dataset.png", dpi=200)
+        fig.savefig(d / "fig_dataset.png")
     plt.close(fig)
     print("  wrote figures/fig_dataset.png")
 

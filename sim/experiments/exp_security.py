@@ -12,6 +12,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 from .. import config, utils
+from ..plotstyle import COL_W, PAGE_W
 from ..security import auth_timing as at
 from ..tdoa import noise as noisemod
 
@@ -76,31 +77,28 @@ def run(scales=config.CHANNEL_SCALES, n=2000):
 def _plot(df, M=config.CHANNEL_SCALES[1]):
     sub = df[df.M == M]
     x = np.arange(len(at.LAYERS)); w = 0.38
-    fig, ax = plt.subplots(figsize=(7.0, 4.4))
-    b1 = ax.bar(x - w / 2, sub.spoof_success, w, label="Spoofing (forged beacon)")
-    b2 = ax.bar(x + w / 2, sub.replay_success, w,
-                label="Replay / meaconing (delayed re-transmission)")
+    fig, ax = plt.subplots(figsize=(COL_W, 2.7))
+    b1 = ax.bar(x - w / 2, sub.spoof_success, w, label="Spoofing")
+    b2 = ax.bar(x + w / 2, sub.replay_success, w, label="Replay / meaconing")
     # A 0.00 bar has no height, so label every bar: otherwise "defeated" and
     # "not measured" look identical.
-    ax.bar_label(b1, fmt="%.2f", fontsize=8, padding=2)
-    ax.bar_label(b2, fmt="%.2f", fontsize=8, padding=2)
+    ax.bar_label(b1, fmt="%.2f", fontsize=6, padding=1.5)
+    ax.bar_label(b2, fmt="%.2f", fontsize=6, padding=1.5)
     ax.set_xticks(x); ax.set_xticklabels([l.replace("_", "\n") for l in at.LAYERS])
     ax.set_xlabel("Security layer applied (cumulative)")
     ax.set_ylabel("Attack-success rate")
-    ax.set_ylim(0, 1.40)                      # headroom so the legend clears the bars
-    ax.set_title(f"Attack success by security layer (M={M} channels)")
-    ax.legend(loc="upper center", bbox_to_anchor=(0.5, 1.0), fontsize=8,
-              framealpha=0.95)
+    ax.set_ylim(0, 1.42)                      # headroom so the legend clears the bars
+    ax.legend(loc="upper right")
     ax.grid(True, axis="y", ls=":", alpha=0.5)
-    # Placed in the empty upper-right quadrant: the bars occupy the left three
-    # groups up to y=1.0 and the legend sits above y=1.25.
-    ax.annotate("a valid signature\nstill loses to replay",
-                xy=(2 + w / 2, 1.04), xytext=(2.52, 1.09), fontsize=8,
-                color="crimson", ha="left",
-                arrowprops=dict(arrowstyle="->", color="crimson"))
+    # Above the L3 group, where both bars are 0.00 -- the only region large
+    # enough -- pointing sideways at the L2 replay bar it describes.
+    ax.annotate("a valid\nsignature still\nloses to replay",
+                xy=(2 + w, 0.75), xytext=(3.0, 0.58), fontsize=6.5,
+                color="crimson", ha="center", va="center",
+                arrowprops=dict(arrowstyle="->", color="crimson", lw=0.8))
     fig.tight_layout()
     for d in (config.FIG_DIR, config.PAPER_FIG_DIR):
-        fig.savefig(d / "fig_security.png", dpi=200)
+        fig.savefig(d / "fig_security.png")
     plt.close(fig)
     print("  wrote figures/fig_security.png")
 

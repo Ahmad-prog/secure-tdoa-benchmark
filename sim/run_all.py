@@ -9,7 +9,8 @@ sim/results/figures (and paper/figures).
 from __future__ import annotations
 import argparse, time
 from .experiments import (exp_dataset, exp_tdoa, exp_antijam, exp_scaling,
-                          exp_security, exp_cost, exp_sync, exp_significance)
+                          exp_security, exp_cost, exp_sync, exp_significance,
+                          exp_collapse)
 
 
 STAGES = [
@@ -21,6 +22,7 @@ STAGES = [
     ("sync     (hop-sync drift tolerance)", exp_sync.run, False),
     ("scaling  (RO2 deep learning at scale)", exp_scaling.run, True),
     ("signif.  (significance testing)", exp_significance.run, True),
+    ("collapse (why the learned hopper fails at large M)", exp_collapse.run, True),
 ]
 
 

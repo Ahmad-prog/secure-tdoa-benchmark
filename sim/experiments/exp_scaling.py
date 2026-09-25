@@ -26,6 +26,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 from .. import config, utils, spectrum
+from ..plotstyle import COL_W, PAGE_W
 from ..jammers import taxonomy
 from ..hopping import dqn
 
@@ -111,77 +112,101 @@ def run(scales=config.CHANNEL_SCALES, resume=True):
 
 def _plots(df):
     # crossover -- both training regimes against the training-free baseline
-    fig, ax = plt.subplots(figsize=(6.2, 4.2))
-    ax.errorbar(df.M, df.dqn_avoidance, yerr=df.dqn_avoidance_sd, marker="o",
-                capsize=3, label=f"DQN (equal wall clock, {BUDGET_S:.0f} s)")
-    ax.errorbar(df.M, df.dqn_steps_avoidance, yerr=df.dqn_steps_avoidance_sd,
-                marker="^", ls="-.", capsize=3, color="tab:green",
-                label=f"DQN (equal steps, {STEP_MATCHED:,})")
+    def _bars(mean, sd):
+        # avoidance is a rate in [0, 1]; a symmetric +-sd bar would run past it
+        return [np.minimum(sd, mean), np.minimum(sd, 1.0 - mean)]
+
+    fig, ax = plt.subplots(figsize=(COL_W, 2.6))
+    ax.errorbar(df.M, df.dqn_avoidance,
+                yerr=_bars(df.dqn_avoidance, df.dqn_avoidance_sd), marker="o",
+                capsize=2, label=f"DQN, equal time ({BUDGET_S:.0f} s)")
+    ax.errorbar(df.M, df.dqn_steps_avoidance,
+                yerr=_bars(df.dqn_steps_avoidance, df.dqn_steps_avoidance_sd),
+                marker="^", ls="-.", capsize=2, color="tab:green",
+                label=f"DQN, equal steps ({STEP_MATCHED:,})")
     ax.plot(df.M, df.crypto_avoidance, "s--", color="tab:orange",
-            label="Cryptographic hopping (training-free)")
-    ax.set_xscale("log"); ax.set_xlabel("Number of channels M")
+            label="Crypto hopping (no training)")
+    ax.set_xscale("log"); ax.set_xlabel("Number of channels $M$")
     ax.set_ylabel("Jamming-avoidance rate"); ax.set_ylim(-0.05, 1.05)
-    ax.set_title("Learned vs cryptographic hopping as channels scale")
-    ax.grid(True, which="both", ls=":", alpha=0.5); ax.legend(fontsize=8)
+    ax.grid(True, which="both", ls=":", alpha=0.5)
+    # lower left is the one region no line or error bar passes through
+    ax.legend(loc="lower left")
     fig.tight_layout()
     for d in (config.FIG_DIR, config.PAPER_FIG_DIR):
-        fig.savefig(d / "fig_scaling_crossover.png", dpi=200)
+        fig.savefig(d / "fig_scaling_crossover.png")
     plt.close(fig)
 
     # cost -- two single-axis panels. A twin-axis version of this plot cannot be
     # read without a legend telling you which curve belongs to which scale.
-    fig, (axL, axR) = plt.subplots(1, 2, figsize=(9.0, 3.9))
+    # Point labels go on the side of the marker the line does NOT leave from:
+    # below-right of a rising curve, above-right of a falling one. The last
+    # point of a rising curve flips to above-left to stay inside the axes.
+    def _label_points(ax, xs, ys, fmt, rising):
+        last = len(xs) - 1
+        for i, (x, y) in enumerate(zip(xs, ys)):
+            if rising and i == last:
+                off, ha, va = (-5, 4), "right", "bottom"
+            elif rising:
+                off, ha, va = (5, -3), "left", "top"
+            else:
+                off, ha, va = (5, 3), "left", "bottom"
+            ax.annotate(fmt(y), (x, y), textcoords="offset points", xytext=off,
+                        ha=ha, va=va, fontsize=6.5)
+
+    fig, (axL, axR) = plt.subplots(1, 2, figsize=(0.8 * PAGE_W, 2.3))  # 0.8 textwidth
     axL.loglog(df.M, df.params, "o-", color="tab:blue")
-    axL.set_xlabel("Number of channels M")
+    axL.set_xlabel("Number of channels $M$")
     axL.set_ylabel("Trainable parameters")
-    axL.set_title("Model size grows as $O(M)$", fontsize=10)
+    axL.set_title("Model size grows as $O(M)$")
     axL.grid(True, which="both", ls=":", alpha=0.5)
-    for x, y in zip(df.M, df.params):
-        axL.annotate(f"{int(y):,}", (x, y), textcoords="offset points",
-                     xytext=(0, -13), fontsize=7, ha="center")
+    _label_points(axL, df.M, df.params, lambda v: f"{int(v):,}", rising=True)
 
     axR.loglog(df.M, df.steps_per_sec, "s-", color="tab:red")
-    axR.set_xlabel("Number of channels M")
-    axR.set_ylabel("Training throughput (gradient steps per second)")
-    axR.set_title("Training throughput collapses", fontsize=10)
+    axR.set_xlabel("Number of channels $M$")
+    axR.set_ylabel("Gradient steps per second")
+    axR.set_title("Training throughput collapses")
     axR.grid(True, which="both", ls=":", alpha=0.5)
-    for x, y in zip(df.M, df.steps_per_sec):
-        axR.annotate(f"{y:,.0f}", (x, y), textcoords="offset points",
-                     xytext=(0, 8), fontsize=7, ha="center")
-    fig.suptitle("Deep-learning training cost vs channel count", fontsize=11)
-    fig.tight_layout(rect=[0, 0, 1, 0.94])
+    _label_points(axR, df.M, df.steps_per_sec, lambda v: f"{v:,.0f}", rising=False)
+    for a in (axL, axR):
+        a.margins(x=0.22, y=0.15)             # room for the point labels
+    fig.tight_layout(w_pad=1.5)
     for d in (config.FIG_DIR, config.PAPER_FIG_DIR):
-        fig.savefig(d / "fig_scaling_cost.png", dpi=200)
+        fig.savefig(d / "fig_scaling_cost.png")
     plt.close(fig)
 
     # convergence -- one unit only (gradient steps). Plotting steps and seconds
     # on a shared axis makes the y-value ambiguous.
-    fig, ax = plt.subplots(figsize=(6.4, 4.2))
+    fig, ax = plt.subplots(figsize=(COL_W, 2.6))
     ok = df.dropna(subset=["steps_to_converge"])
     missed = df[df.steps_to_converge.isna()]
     if not ok.empty:
         ax.loglog(ok.M, ok.steps_to_converge, "o-", color="tab:purple",
-                  label="Gradient steps to first reach 0.90 avoidance")
+                  label="Steps to first reach 0.90 avoidance")
         for x, y in zip(ok.M, ok.steps_to_converge):
             ax.annotate(f"{y:,.0f}", (x, y), textcoords="offset points",
-                        xytext=(0, 9), fontsize=7, ha="center")
+                        xytext=(6, -3), ha="left", fontsize=6.5)
+    # The training limit is drawn as a line, and runs that never converged sit
+    # ON it: they were cut off there, so plotting them anywhere else would
+    # invent a value.
+    ax.axhline(STEP_MATCHED, ls="--", color="0.45", lw=0.9,
+               label=f"Training limit ({STEP_MATCHED:,} steps)")
     if not missed.empty:
-        ceiling = (ok.steps_to_converge.max() if not ok.empty else 1.0)
-        ax.scatter(missed.M, [ceiling * 3] * len(missed), marker="x", s=70,
-                   color="tab:red", zorder=4,
-                   label=f"Never reached 0.90 within {STEP_MATCHED:,} steps")
-    ax.set_xlabel("Number of channels M")
-    ax.set_ylabel("Gradient steps to reach 0.90 avoidance")
-    ax.set_title("Training cost of a fixed competence level")
+        ax.scatter(missed.M, [STEP_MATCHED] * len(missed), marker="x", s=40,
+                   color="tab:red", zorder=4, linewidths=1.5,
+                   label="Limit reached, 0.90 never reached")
+    lo = ok.steps_to_converge.min() if not ok.empty else STEP_MATCHED / 10
+    ax.set_ylim(lo / 1.6, STEP_MATCHED * 3.2)    # headroom above the limit for the legend
+    ax.set_xlim(df.M.min() / 1.6, df.M.max() * 1.6)
+    ax.set_xlabel("Number of channels $M$")
+    ax.set_ylabel("Gradient steps to 0.90 avoidance")
     ax.grid(True, which="both", ls=":", alpha=0.5)
-    ax.legend(fontsize=8, loc="upper left", framealpha=0.95)
+    ax.legend(loc="upper left")
     fig.tight_layout()
     for d in (config.FIG_DIR, config.PAPER_FIG_DIR):
-        fig.savefig(d / "fig_scaling_convergence.png", dpi=200)
+        fig.savefig(d / "fig_scaling_convergence.png")
     plt.close(fig)
     print("  wrote figures/fig_scaling_crossover.png, fig_scaling_cost.png, "
           "fig_scaling_convergence.png")
-
 
 if __name__ == "__main__":
     run()

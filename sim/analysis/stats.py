@@ -1,5 +1,5 @@
 """Significance testing helpers (paired t-test, Wilcoxon, bootstrap CI,
-Cohen's d) used across the study (IRB statistical-analysis requirement)."""
+Cohen's d) used across the study."""
 from __future__ import annotations
 import numpy as np
 from scipy import stats

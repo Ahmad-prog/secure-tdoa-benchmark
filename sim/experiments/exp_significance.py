@@ -1,5 +1,5 @@
 """Experiment 7 -- statistical significance of the headline comparisons
-(IRB stats requirement: paired tests, 95% CIs, effect sizes, Bonferroni).
+(paired tests, 95% CIs, effect sizes, Bonferroni correction).
 
 Produces: data/significance_results.csv
 """

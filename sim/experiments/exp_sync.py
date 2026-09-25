@@ -15,6 +15,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from .. import config, utils
+from ..plotstyle import COL_W, PAGE_W
 
 HOP_RATES = [100, 1000, 10000]     # hops/s
 GUARD_FRAC = 0.5                    # de-hop ok while |offset| < guard*dwell
@@ -54,24 +55,28 @@ def _plot(df):
     # Plotted against ABSOLUTE offset. Normalising by dwell collapses every hop
     # rate onto one curve, which hides the point: the faster the hopping, the
     # tighter the clock requirement in real time.
-    fig, ax = plt.subplots(figsize=(6.4, 4.2))
+    fig, ax = plt.subplots(figsize=(COL_W, 2.75))
     for hr in HOP_RATES:
         sub = df[(df.hop_rate == hr) & (df.offset_us > 0)]
         dwell = float(sub.dwell_us.iloc[0])
-        ax.semilogx(sub.offset_us, sub.success, "-o", ms=3.5,
-                    label=f"{hr:,} hops/s (dwell {dwell:,.0f} $\\mu$s)")
+        ax.semilogx(sub.offset_us, sub.success, "-o", ms=2,
+                    label=f"{hr:,} hops/s ({dwell:,.0f} $\\mu$s dwell)")
     ax.axhline(0.99, ls=":", color="k", alpha=0.6)
-    ax.text(ax.get_xlim()[0] * 1.1, 0.965, "99% de-hop success",
-            fontsize=8, color="0.3")
-    ax.set_xlabel("Clock offset between beacon and drone ($\\mu$s, log scale)")
+    # top-right corner: every curve has already fallen to 0 there
+    ax.text(0.98, 1.035, "99% de-hop success",
+            transform=ax.get_yaxis_transform(),       # x: axes fraction, y: data
+            ha="right", va="bottom", fontsize=6.5, color="0.3")
+    ax.set_xlabel("Clock offset between beacon and drone ($\\mu$s)")
     ax.set_ylabel("De-hop success rate")
-    ax.set_ylim(-0.05, 1.12)
-    ax.set_title("Hop-synchronization drift tolerance by hop rate")
+    ax.set_ylim(-0.05, 1.14)
     ax.grid(True, which="both", ls=":", alpha=0.5)
-    ax.legend(loc="lower left", fontsize=8, framealpha=0.95)
+    # Below the axes: at column width no interior region is wide enough for
+    # three entries without crossing a curve.
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.24), ncol=1,
+              frameon=False)
     fig.tight_layout()
     for d in (config.FIG_DIR, config.PAPER_FIG_DIR):
-        fig.savefig(d / "fig_sync.png", dpi=200)
+        fig.savefig(d / "fig_sync.png")
     plt.close(fig)
     print("  wrote figures/fig_sync.png")
 
